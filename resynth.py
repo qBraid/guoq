@@ -216,6 +216,7 @@ def bqskit_io(compiler, data, circuit_str, opt_level, epsilon, target_gateset):
         qiskit_to_bqskit(qc).get_unitary(),
         optimization_level=opt_level,
         synthesis_epsilon=epsilon,
+        max_synthesis_size=int(os.environ.get("GUOQ_MAX_SYNTH_SIZE", "3")),
         compiler=compiler,
         model=model,
     )
@@ -385,15 +386,17 @@ def start_server(bqskit, bqskit_auto_workers, verbose=False, path_to_synthetiq=N
     bqskit_compiler = None
     if bqskit:
         if bqskit_auto_workers:
-            bqskit_compiler = Compiler()
+            bqskit_compiler = Compiler(port=int(os.environ.get("GUOQ_BQSKIT_RUNTIME_PORT", "7472")), worker_port=int(os.environ.get("GUOQ_BQSKIT_WORKER_PORT", "7474")))
         else:
-            bqskit_compiler = Compiler(num_workers=64)
+            bqskit_compiler = Compiler(num_workers=int(os.environ.get("GUOQ_BQSKIT_WORKERS", "64")), port=int(os.environ.get("GUOQ_BQSKIT_RUNTIME_PORT", "7472")), worker_port=int(os.environ.get("GUOQ_BQSKIT_WORKER_PORT", "7474")))
     partial_handler = partial(
         MyHandler, bqskit_compiler, verbose, path_to_synthetiq
     )
     try:
         socketserver.TCPServer.allow_reuse_address = True
-        httpd = socketserver.TCPServer(("", 8080), partial_handler)
+        socketserver.ThreadingTCPServer.allow_reuse_address = True
+        socketserver.ThreadingTCPServer.daemon_threads = True
+        httpd = socketserver.ThreadingTCPServer(("", int(os.environ.get("GUOQ_RESYNTH_PORT", "18080"))), partial_handler)
         httpd.serve_forever()
     except KeyboardInterrupt:
         httpd.shutdown()

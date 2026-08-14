@@ -26,7 +26,7 @@ public class Synthetiq {
     public static String socket(String circuit, int numCircuits, double epsilon, int threads, String targetGateset) {
         try {
             // Specify the URL along with the query parameters
-            String urlString = "http://localhost:8080/synthetiq";
+            String urlString = "http://localhost:" + System.getenv().getOrDefault("GUOQ_RESYNTH_PORT", "18080") + "/synthetiq";
             String parameter1 = "circuit";
             String parameter2 = "num_circuits";
             String parameter3 = "epsilon";

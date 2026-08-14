@@ -15,7 +15,7 @@ public class Pyzx {
 
     public static String socket(String circuit) {
         try {
-            String urlString = "http://localhost:8080/pyzx";
+            String urlString = "http://localhost:" + System.getenv().getOrDefault("GUOQ_RESYNTH_PORT", "18080") + "/pyzx";
             Gson gson = new GsonBuilder().create();
             HashMap<String, String> log = new HashMap<>();
             log.put("circuit", circuit);

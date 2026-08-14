@@ -21,7 +21,7 @@ public class Bqskit {
     public static String socket(String circuit, int optLevel, double epsilon, String targetGateset) {
         try {
             // Specify the URL along with the query parameters
-            String urlString = "http://localhost:8080/bqskit";
+            String urlString = "http://localhost:" + System.getenv().getOrDefault("GUOQ_RESYNTH_PORT", "18080") + "/bqskit";
 
             Gson gson = new GsonBuilder().create();
             HashMap<String, String> log = new HashMap<>();
