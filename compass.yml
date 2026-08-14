@@ -1,0 +1,16 @@
+name: guoq
+id: ari:cloud:compass:8526d2ba-687c-46b3-8b65-acaf550a9b39:component/141c5c30-d6a4-4eb9-b8dd-1a0c55663014/c3ea9b44-8cd7-496c-a32d-e12492d10919
+description: null
+configVersion: 1
+typeId: SERVICE
+fields:
+  tier: 4
+links:
+  - name: null
+    type: REPOSITORY
+    url: https://github.com/qBraid/guoq
+relationships:
+  DEPENDS_ON: []
+labels:
+  - source:github
+customFields: null
