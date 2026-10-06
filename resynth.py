@@ -212,8 +212,9 @@ def bqskit_io(compiler, data, circuit_str, opt_level, epsilon, target_gateset):
         if target_gateset == "ion"
         else None
     )
+    target = qiskit_to_bqskit(qc).get_unitary()
     circuit = compile(
-        qiskit_to_bqskit(qc).get_unitary(),
+        target,
         optimization_level=opt_level,
         synthesis_epsilon=epsilon,
         max_synthesis_size=int(os.environ.get("GUOQ_MAX_SYNTH_SIZE", "3")),
@@ -221,6 +222,14 @@ def bqskit_io(compiler, data, circuit_str, opt_level, epsilon, target_gateset):
         model=model,
     )
     data["bqskit_params"] = {"opt_level": opt_level, "epsilon": epsilon}
+    # The optimizer's error bound (epsilon per call, summed over the calls it allows)
+    # only holds if every resynthesis meets its epsilon, and synthesis returns its best
+    # attempt when it does not. Measure it, and hand back the block unchanged if not.
+    distance = circuit.get_unitary().get_distance_from(target)
+    data["distance"] = distance
+    if distance > epsilon:
+        data["rejected"] = True
+        return circuit_str
     data["resynth_size"] = circuit.num_operations
     data["resynth_2q_size"] = (
         circuit.gate_counts[CXGate()] if CXGate() in circuit.gate_counts else 0
