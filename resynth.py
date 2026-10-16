@@ -202,6 +202,28 @@ GATE_SET_DICT = {
 }
 
 
+#: How a resynthesized block is held to its epsilon (env GUOQ_RESYNTH_CHECK):
+#: "hs" uses BQSKit's own synthesis metric, the degree-1 Hilbert-Schmidt distance
+#: 1 - |Tr(U^dag V)|/N; "d2" the degree-2 distance, whose float floor (~1e-8) is far
+#: above the per-call epsilon, so it rejects exact syntheses too; "off" does not check.
+RESYNTH_CHECKS = ("hs", "d2", "off")
+#: Round-off allowance on the hs distance, which bottoms out near 1e-16.
+HS_SLACK = 1e-15
+#: Prefix of the one-line JSON record printed per BQSKit call, for log parsers.
+TELEMETRY_PREFIX = "RESYNTH_TELEMETRY "
+
+
+def resynth_check():
+    check = os.environ.get("GUOQ_RESYNTH_CHECK", "hs")
+    if check not in RESYNTH_CHECKS:
+        raise ValueError(f"GUOQ_RESYNTH_CHECK must be one of {RESYNTH_CHECKS}, got {check!r}")
+    return check
+
+
+def two_qubit_count(circuit):
+    return sum(n for gate, n in circuit.gate_counts.items() if gate.num_qudits == 2)
+
+
 def bqskit_io(compiler, data, circuit_str, opt_level, epsilon, target_gateset):
     qc = QuantumCircuit.from_qasm_str(circuit_str)
     data["circuit"] = circuit_str
@@ -224,16 +246,20 @@ def bqskit_io(compiler, data, circuit_str, opt_level, epsilon, target_gateset):
     data["bqskit_params"] = {"opt_level": opt_level, "epsilon": epsilon}
     # The optimizer's error bound (epsilon per call, summed over the calls it allows)
     # only holds if every resynthesis meets its epsilon, and synthesis returns its best
-    # attempt when it does not. Measure it, and hand back the block unchanged if not.
-    distance = circuit.get_unitary().get_distance_from(target)
-    data["distance"] = distance
-    if distance > epsilon:
+    # attempt when it does not. Measure it in the metric synthesis stops on, and hand
+    # back the block unchanged if it misses.
+    check = resynth_check()
+    unitary = circuit.get_unitary()
+    hs = float(unitary.get_distance_from(target, 1))
+    d2 = float(unitary.get_distance_from(target))
+    data["check"] = check
+    data["distance"] = hs
+    data["d2"] = d2
+    data["resynth_size"] = circuit.num_operations
+    data["resynth_2q_size"] = two_qubit_count(circuit)
+    if (check == "hs" and hs > epsilon + HS_SLACK) or (check == "d2" and d2 > epsilon):
         data["rejected"] = True
         return circuit_str
-    data["resynth_size"] = circuit.num_operations
-    data["resynth_2q_size"] = (
-        circuit.gate_counts[CXGate()] if CXGate() in circuit.gate_counts else 0
-    ) + (circuit.gate_counts[RXXGate()] if RXXGate() in circuit.gate_counts else 0)
 
     if target_gateset != "none" and target_gateset != "ion":
         circuit = bqskit_to_qiskit(circuit)
@@ -358,6 +384,12 @@ class MyHandler(BaseHTTPRequestHandler):
             time2 = time.time()
             data["time"] = time2 - time1
             print(data)
+            telemetry = {
+                key: data.get(key)
+                for key in ("check", "distance", "d2", "original_2q_size", "resynth_2q_size", "time")
+            }
+            telemetry.update(epsilon=float(parsed_body["epsilon"]), rejected=bool(data.get("rejected")))
+            print(TELEMETRY_PREFIX + json.dumps(telemetry), flush=True)
         if parsed_path.path == "/synthetiq":
             parsed_body = json.loads(body)
             time1 = time.time()
@@ -394,6 +426,7 @@ def start_server(bqskit, bqskit_auto_workers, verbose=False, path_to_synthetiq=N
         sys.stderr = open(os.devnull, "w")
     bqskit_compiler = None
     if bqskit:
+        print(f"resynthesis check: {resynth_check()}", flush=True)
         if bqskit_auto_workers:
             bqskit_compiler = Compiler(port=int(os.environ.get("GUOQ_BQSKIT_RUNTIME_PORT", "7472")), worker_port=int(os.environ.get("GUOQ_BQSKIT_WORKER_PORT", "7474")))
         else:
