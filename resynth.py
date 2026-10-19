@@ -244,10 +244,10 @@ def bqskit_io(compiler, data, circuit_str, opt_level, epsilon, target_gateset):
         model=model,
     )
     data["bqskit_params"] = {"opt_level": opt_level, "epsilon": epsilon}
-    # The optimizer's error bound (epsilon per call, summed over the calls it allows)
-    # only holds if every resynthesis meets its epsilon, and synthesis returns its best
-    # attempt when it does not. Measure it in the metric synthesis stops on, and hand
-    # back the block unchanged if it misses.
+    # Synthesis returns its best attempt when it misses epsilon, so check the block in
+    # the metric synthesis stops on and hand it back unchanged if it misses. That
+    # metric (1 - f) grows with the square of the error, so summing the per-call
+    # epsilons does not bound the final circuit: callers must verify the result.
     check = resynth_check()
     unitary = circuit.get_unitary()
     hs = float(unitary.get_distance_from(target, 1))
