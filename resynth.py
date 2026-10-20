@@ -204,11 +204,16 @@ GATE_SET_DICT = {
 
 #: How a resynthesized block is held to its epsilon (env GUOQ_RESYNTH_CHECK):
 #: "hs" uses BQSKit's own synthesis metric, the degree-1 Hilbert-Schmidt distance
-#: 1 - |Tr(U^dag V)|/N; "d2" the degree-2 distance, whose float floor (~1e-8) is far
-#: above the per-call epsilon, so it rejects exact syntheses too; "off" does not check.
-RESYNTH_CHECKS = ("hs", "d2", "off")
+#: 1 - |Tr(U^dag V)|/N; "exact" the same distance held to EXACT_HS whatever the
+#: epsilon, so only blocks exact up to round-off are kept; "d2" the degree-2
+#: distance, whose float floor (~1e-8) is far above the per-call epsilon, so it rejects
+#: exact syntheses too; "off" does not check.
+RESYNTH_CHECKS = ("hs", "exact", "d2", "off")
 #: Round-off allowance on the hs distance, which bottoms out near 1e-16.
 HS_SLACK = 1e-15
+#: Most hs distance the "exact" check keeps. Round-off on a 3-qubit block reaches a few
+#: 1e-15; a synthesis left approximate measured 1e-13 and above.
+EXACT_HS = 1e-14
 #: Prefix of the one-line JSON record printed per BQSKit call, for log parsers.
 TELEMETRY_PREFIX = "RESYNTH_TELEMETRY "
 
@@ -257,7 +262,11 @@ def bqskit_io(compiler, data, circuit_str, opt_level, epsilon, target_gateset):
     data["d2"] = d2
     data["resynth_size"] = circuit.num_operations
     data["resynth_2q_size"] = two_qubit_count(circuit)
-    if (check == "hs" and hs > epsilon + HS_SLACK) or (check == "d2" and d2 > epsilon):
+    if (
+        (check == "hs" and hs > epsilon + HS_SLACK)
+        or (check == "exact" and hs > EXACT_HS)
+        or (check == "d2" and d2 > epsilon)
+    ):
         data["rejected"] = True
         return circuit_str
 
